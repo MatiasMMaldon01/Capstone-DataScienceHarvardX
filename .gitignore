@@ -1,0 +1,8 @@
+*.zip
+*.Rhistory
+*.dat
+*.tex
+*.xml
+*.docx
+
+ratings
