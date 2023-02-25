@@ -3,7 +3,12 @@ title: "MovieLens Recommendation System - Capstone"
 author: "Martinez Maldonado Matías"
 date: "2023-02-17"
 output:
-  pdf_document: default
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    highlight: pygments
+    keep_tex: true
   html_document: default
 ---
 
@@ -21,6 +26,7 @@ library(tidyverse)
 library(caret)
 library(lubridate)
 library(stringr)
+library(kableExtra)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
@@ -83,25 +89,30 @@ RMSE <- function(true_ratings, predicted_ratings){
 }
 ```
 
-## Data Exploration
-
+## Pre-Processing Data
+First of all, we pre-processing the data to manipulate it easier.
+ *1)* Searching for missing values.
+ As we see, there is no missing values. This is really important because now we skip steps due to we dont have to fill this missing values.
 ```{r}
-
-edx %>% select(rating, title) %>% group_by(rating) %>%
-  summarize(count = n()) %>%
-  arrange(desc(count))
-
-
+sapply(edx, function(x) sum(is.na(x))) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("hover", "responsive", "bordered"),
+                 position = "center",
+                 font_size = 10,
+                 full_width = FALSE) %>%
+  column_spec(1, color = "black", bold = TRUE) %>%
+  column_spec(2, color = "white",
+              background = "red") %>%
+  row_spec(0, color = "black", bold = TRUE)
 ```
-
-## Pre-Proccesing Data
-
+ *2)* Convert timestamp predictor into a human most readable format.
 ```{r}
-# Convert timestamp predictor into a human most readable format
 edx$year <- edx$timestamp %>% as_datetime() %>% year()
 edx$month <- edx$timestamp %>% as_datetime() %>% month()
-
-#Extract the release date from title to a new predictor
+```
+ *3)* Extract the release date from title to a new predictor.
+```{r}
+# Extract the release date from title to a new predictor
 edx <- edx %>% mutate(release_date = title %>% str_extract_all("\\([0-9]{4}\\)") %>%
                  str_extract("[0-9]{4}") %>% as.numeric(),
                title = title %>% str_remove("\\([0-9]{4}\\)")%>% str_trim("right"))
@@ -113,14 +124,43 @@ final_holdout_test <- final_holdout_test %>% mutate(release_date = title %>% str
                              year = timestamp %>% as_datetime() %>% year(),
                              month = timestamp %>% as_datetime() %>% month())
 
-# Analizing data
 
+edx_temp <- edx %>% select(-timestamp)
+```
+
+## Data Exploration
+
+After pre-processing the data, we start the exploratory data analysis (EDA) to complain how best to manipulate data sources to get the answers we need, making it easier for us to discover patterns, spot anomalies, test a hypothesis, or check assumptions. Then we ask ourselves a series of questions.
+
+```{r}
+str(edx_temp)
+```
+
+The features in both datasets are:
+
+- **userId** ```<integer>``` that contains the unique identification number for each user.
+- **movieId** ```<integer>``` that contains the unique identification number for each movie.
+- **rating** ```<numeric>``` that contains the rating of one movie by one user. Ratings are made on a 5-Star scale with half-star increments.
+- **title** ```<character>``` that contains the title of each movie including the year of the release.
+- **genres** ```<character>``` that contains a list of pipe-separated of genre of each movie.
+- **year** ```<numeric>``` that contains the year of each rating.
+- **motnh** ```<numeric>``` that contains the month of each rating.
+- **release_date** ```<numeric>``` that contains the year of each movie release date.
+
+```{r}
+edx_temp %>% select(rating, title) %>% group_by(rating) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count))
+```
+
+```{r}
 edx %>% group_by(release_date) %>% summarize(count_rating = n()) %>% 
   ggplot(aes(release_date, count_rating)) +
   geom_col()
+```
 
+```{r}
 # Most 20 rated movies
-
 edx %>% group_by(movieId, title) %>%
   summarize(count_rates = n()) %>%
   arrange(desc(count_rates)) %>% head(20) %>%
@@ -128,11 +168,10 @@ edx %>% group_by(movieId, title) %>%
   geom_col() + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 7)) +
   labs(title = "Ratings Frequency Distribution - TOP 20 Movies",
        x = "Title", y = "Frequency")
+```
 
-#################################################################################
-
-edx_temp <- edx %>% select(-timestamp)
-
+## Creating the Model
+```{r}
 # Create data partition
 
 index_test <- createDataPartition(edx_temp$rating, times = 1, p=.25, list=FALSE)
